@@ -9,10 +9,8 @@ To install this middleware, add to your ``settings.MIDDLEWARE_CLASSES``::
 Make sure that it is placed **after** authentication middlewares.
 """
 
-import time
 from datetime import datetime, timedelta
 
-from django import http
 from django.contrib.auth import logout
 from django.core.urlresolvers import reverse
 
@@ -29,6 +27,12 @@ class SessionSecurityMiddleware(object):
     def is_passive_request(self, request):
         return request.path in PASSIVE_URLS
 
+    def is_expired(self, request, last_activity):
+        """Check if this request occurred after the expiration time."""
+        now = datetime.now()
+        delta = now - last_activity
+        return delta >= timedelta(seconds=EXPIRE_AFTER)
+
     def process_request(self, request):
         """ Update last activity time or logout. """
         if not request.user.is_authenticated():
@@ -37,8 +41,8 @@ class SessionSecurityMiddleware(object):
         now = datetime.now()
         self.update_last_activity(request, now)
 
-        delta = now - get_last_activity(request.session)
-        if delta >= timedelta(seconds=EXPIRE_AFTER):
+        last_activity = get_last_activity(request.session)
+        if self.is_expired(request, last_activity):
             logout(request)
         elif not self.is_passive_request(request):
             set_last_activity(request.session, now)
